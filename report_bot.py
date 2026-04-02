@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-from datetime import datetime, timezone
+from datetime import datetime
 
 st.set_page_config(page_title="UPHD Aging Matrix", layout="wide")
 st.title("📊 UPHD Pendency Aging Matrix")
@@ -25,64 +25,57 @@ if st.button("Generate Aging Pivot"):
                 df = pd.json_normalize(data.get('works', []))
 
                 if not df.empty:
-                    # 1. DATE & AGING CALCULATION
-                    date_col = next((c for c in df.columns if 'created_date' in c.lower()), None)
+                    cols = df.columns.tolist()
+                    
+                    # --- FIX: REMOVE TIME (T18:33:30Z) AS PER YOUR HINT ---
+                    date_col = next((c for c in cols if 'created_date' in c.lower()), None)
                     if date_col:
-                        df[date_col] = pd.to_datetime(df[date_col], utc=True)
-                        now_utc = datetime.now(timezone.utc)
-                        df['Days'] = (now_utc - df[date_col]).dt.days
+                        # Step 1: Force to String and split at 'T' to get only Date (YYYY-MM-DD)
+                        df[date_col] = df[date_col].astype(str).str.split('T').str[0]
                         
-                        # Define Buckets (Exactly like your screenshot)
+                        # Step 2: Convert the clean date string to datetime
+                        df[date_col] = pd.to_datetime(df[date_col])
+                        
+                        # Step 3: Get today's date without time for calculation
+                        today = pd.Timestamp.now().normalize()
+                        
+                        # Step 4: Calculate Days
+                        df['Days'] = (today - df[date_col]).dt.days
+                        
+                        # Define Buckets
                         def get_bucket(d):
                             if d <= 1: return "0-1 Day"
                             elif d <= 3: return "2-3 Days"
                             else: return "3+ Days"
                         df['Aging Bucket'] = df['Days'].apply(get_bucket)
 
-                    # 2. GROUP FILTERING
-                    # API mein Group column ka naam dhundna
-                    group_col = next((c for c in df.columns if 'group' in c.lower()), None)
-                    
+                    # --- PIVOT LOGIC ---
+                    group_col = next((c for c in cols if 'group' in c.lower()), None)
                     if group_col:
-                        # Sirf relevant groups rakhein (Modify names if they differ in API)
-                        target_groups = ['UPHD-PAYMENTS', 'UPHD-REFUNDS', 'L3-SUPPORT', 'KAM-TEAM'] 
-                        df_filtered = df[df[group_col].str.contains('|'.join(target_groups), na=False, case=False)]
-                    else:
-                        df_filtered = df
-
-                    # 3. GENERATE PIVOT (The Aging Matrix)
-                    st.subheader("📌 Aging Pivot Table")
-                    
-                    # Columns define karna for sorting
-                    bucket_order = ["0-1 Day", "2-3 Days", "3+ Days"]
-                    
-                    if group_col:
-                        pivot = df_filtered.pivot_table(
+                        # Grouping by your specified groups
+                        pivot = df.pivot_table(
                             index=group_col, 
                             columns='Aging Bucket', 
                             values='display_id', 
                             aggfunc='count', 
                             fill_value=0,
-                            margins=True, # For Total column
+                            margins=True,
                             margins_name='Grand Total'
                         )
                         
-                        # Sort columns properly
-                        available_buckets = [b for b in bucket_order if b in pivot.columns]
-                        if 'Grand Total' in pivot.columns: available_buckets.append('Grand Total')
-                        pivot = pivot[available_buckets]
-                        
-                        st.table(pivot)
+                        # Sorting Buckets
+                        bucket_order = ["0-1 Day", "2-3 Days", "3+ Days", "Grand Total"]
+                        available_cols = [b for b in bucket_order if b in pivot.columns]
+                        st.table(pivot[available_cols])
                     
                     st.subheader("📝 Detailed View")
-                    st.dataframe(df_filtered[['display_id', group_col, 'Aging Bucket', 'Days']] if group_col in df_filtered.columns else df_filtered)
+                    st.dataframe(df, use_container_width=True)
                     
                 else:
-                    st.warning("No data found in DevRev.")
+                    st.warning("No data found.")
             else:
-                st.error(f"API Error: {response.status_code}")
+                st.error(f"API Error {response.status_code}")
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"System Error: {str(e)}")
 
-st.sidebar.markdown("---")
-st.sidebar.write("Logic: Created Date vs Today (UTC)")
+st.sidebar.write("Time Filter: Date Only (Time Stripped) ✅")
