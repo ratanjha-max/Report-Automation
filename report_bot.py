@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-from datetime import datetime
+from datetime import datetime, timezone # Timezone import kiya
 
 st.set_page_config(page_title="DevRev Automator", layout="wide")
 st.title("📊 DevRev Reporting Automation")
@@ -22,46 +22,44 @@ if st.button("Sync Live Data from DevRev"):
             response = requests.get(url, headers=headers)
             if response.status_code == 200:
                 data = response.json()
-                # Use json_normalize to flatten nested structures
                 df = pd.json_normalize(data.get('works', []))
 
                 if not df.empty:
-                    # --- DYNAMIC COLUMN FIX ---
                     cols = df.columns.tolist()
                     
-                    # 1. Pendency Check (Created Date dhundna)
+                    # --- FIX: TIMEZONE NAIVE vs AWARE ERROR ---
                     date_col = next((c for c in cols if 'created_date' in c.lower()), None)
                     if date_col:
-                        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-                        df['Aging (Days)'] = (datetime.now() - df[date_col]).dt.days
+                        # 1. Date ko datetime mein convert karo (UTC ke saath)
+                        df[date_col] = pd.to_datetime(df[date_col], utc=True)
+                        
+                        # 2. Aaj ki date ko bhi UTC 'Aware' banao
+                        now_utc = datetime.now(timezone.utc)
+                        
+                        # 3. Ab subtraction safely ho jayega
+                        df['Aging (Days)'] = (now_utc - df[date_col]).dt.days
                     
-                    # 2. Status/Stage check
+                    # --- PIVOT LOGIC ---
                     status_col = next((c for c in cols if 'stage.name' in c.lower() or 'status' in c.lower()), None)
                     
-                    # 3. Display ID (Counting ke liye)
-                    id_col = next((c for c in cols if 'display_id' in c or 'id' in c), cols[0])
-
                     st.subheader("📈 Ticket Pendency Pivot")
                     if status_col:
-                        # Pivot Table with Error Handling
                         pivot = df.groupby(status_col).size().reset_index(name='Count')
                         st.table(pivot)
                     else:
-                        st.warning("Status column nahi mila. Niche raw data dekhein.")
+                        st.warning("Status column (Stage) nahi mila.")
 
-                    st.subheader("📝 Detailed Data")
-                    # Sirf top 10 columns dikhao taaki clutter na ho
+                    st.subheader("📝 Detailed Data Preview")
                     st.dataframe(df, use_container_width=True)
                     
                     # Download link
                     csv = df.to_csv(index=False).encode('utf-8')
                     st.download_button("📥 Download Full CSV", data=csv, file_name="devrev_export.csv")
                 else:
-                    st.warning("API response empty hai (Works list is empty).")
+                    st.warning("API response empty hai.")
             else:
                 st.error(f"API Error {response.status_code}: {response.text}")
         except Exception as e:
             st.error(f"System Error: {str(e)}")
 
-# Sidebar
-st.sidebar.write(f"Connected to DevRev ✅")
+st.sidebar.write("Connected to DevRev ✅")
