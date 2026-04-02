@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 import requests
-from datetime import datetime, timezone # Timezone import kiya
+from datetime import datetime, timezone
 
-st.set_page_config(page_title="DevRev Automator", layout="wide")
-st.title("📊 DevRev Reporting Automation")
+st.set_page_config(page_title="UPHD Aging Matrix", layout="wide")
+st.title("📊 UPHD Pendency Aging Matrix")
 
 # Token fetch from Secrets
 try:
@@ -13,8 +13,8 @@ except:
     st.error("Secrets mein 'DEVREV_TOKEN' nahi mila!")
     st.stop()
 
-if st.button("Sync Live Data from DevRev"):
-    with st.spinner("Fetching data..."):
+if st.button("Generate Aging Pivot"):
+    with st.spinner("Fetching and Calculating..."):
         url = "https://api.devrev.ai/works.list"
         headers = {"Authorization": f"Bearer {DEVREV_TOKEN}", "Content-Type": "application/json"}
         
@@ -25,41 +25,64 @@ if st.button("Sync Live Data from DevRev"):
                 df = pd.json_normalize(data.get('works', []))
 
                 if not df.empty:
-                    cols = df.columns.tolist()
-                    
-                    # --- FIX: TIMEZONE NAIVE vs AWARE ERROR ---
-                    date_col = next((c for c in cols if 'created_date' in c.lower()), None)
+                    # 1. DATE & AGING CALCULATION
+                    date_col = next((c for c in df.columns if 'created_date' in c.lower()), None)
                     if date_col:
-                        # 1. Date ko datetime mein convert karo (UTC ke saath)
                         df[date_col] = pd.to_datetime(df[date_col], utc=True)
-                        
-                        # 2. Aaj ki date ko bhi UTC 'Aware' banao
                         now_utc = datetime.now(timezone.utc)
+                        df['Days'] = (now_utc - df[date_col]).dt.days
                         
-                        # 3. Ab subtraction safely ho jayega
-                        df['Aging (Days)'] = (now_utc - df[date_col]).dt.days
+                        # Define Buckets (Exactly like your screenshot)
+                        def get_bucket(d):
+                            if d <= 1: return "0-1 Day"
+                            elif d <= 3: return "2-3 Days"
+                            else: return "3+ Days"
+                        df['Aging Bucket'] = df['Days'].apply(get_bucket)
+
+                    # 2. GROUP FILTERING
+                    # API mein Group column ka naam dhundna
+                    group_col = next((c for c in df.columns if 'group' in c.lower()), None)
                     
-                    # --- PIVOT LOGIC ---
-                    status_col = next((c for c in cols if 'stage.name' in c.lower() or 'status' in c.lower()), None)
-                    
-                    st.subheader("📈 Ticket Pendency Pivot")
-                    if status_col:
-                        pivot = df.groupby(status_col).size().reset_index(name='Count')
-                        st.table(pivot)
+                    if group_col:
+                        # Sirf relevant groups rakhein (Modify names if they differ in API)
+                        target_groups = ['UPHD-PAYMENTS', 'UPHD-REFUNDS', 'L3-SUPPORT', 'KAM-TEAM'] 
+                        df_filtered = df[df[group_col].str.contains('|'.join(target_groups), na=False, case=False)]
                     else:
-                        st.warning("Status column (Stage) nahi mila.")
+                        df_filtered = df
 
-                    st.subheader("📝 Detailed Data Preview")
-                    st.dataframe(df, use_container_width=True)
+                    # 3. GENERATE PIVOT (The Aging Matrix)
+                    st.subheader("📌 Aging Pivot Table")
                     
-                    # Download link
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button("📥 Download Full CSV", data=csv, file_name="devrev_export.csv")
+                    # Columns define karna for sorting
+                    bucket_order = ["0-1 Day", "2-3 Days", "3+ Days"]
+                    
+                    if group_col:
+                        pivot = df_filtered.pivot_table(
+                            index=group_col, 
+                            columns='Aging Bucket', 
+                            values='display_id', 
+                            aggfunc='count', 
+                            fill_value=0,
+                            margins=True, # For Total column
+                            margins_name='Grand Total'
+                        )
+                        
+                        # Sort columns properly
+                        available_buckets = [b for b in bucket_order if b in pivot.columns]
+                        if 'Grand Total' in pivot.columns: available_buckets.append('Grand Total')
+                        pivot = pivot[available_buckets]
+                        
+                        st.table(pivot)
+                    
+                    st.subheader("📝 Detailed View")
+                    st.dataframe(df_filtered[['display_id', group_col, 'Aging Bucket', 'Days']] if group_col in df_filtered.columns else df_filtered)
+                    
                 else:
-                    st.warning("API response empty hai.")
+                    st.warning("No data found in DevRev.")
             else:
-                st.error(f"API Error {response.status_code}: {response.text}")
+                st.error(f"API Error: {response.status_code}")
         except Exception as e:
-            st.error(f"System Error: {str(e)}")
+            st.error(f"Error: {str(e)}")
 
-st.sidebar.write("Connected to DevRev ✅")
+st.sidebar.markdown("---")
+st.sidebar.write("Logic: Created Date vs Today (UTC)")
