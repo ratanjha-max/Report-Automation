@@ -3,52 +3,59 @@ import pandas as pd
 import requests
 from datetime import datetime
 
-# --- SECURITY: AUTHENTICATION ---
-# Paste your Token here or use Streamlit Secrets for safety
-DEVREV_TOKEN = "eyJhbGciOiJSUzI1NiIsImlzcyI6Imh0dHBzOi8vYXV0aC10b2tlbi5kZXZyZXYuYWkvIiwia2lkIjoic3RzX2tpZF9yc2EiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOlsiamFudXMiXSwiYXpwIjoiZG9uOmlkZW50aXR5OmR2cnYtaW4tMTpkZXZvLzJHMlZacWNyaWk6ZGV2dS8xMTcyIiwiZXhwIjoxNzc3NzM4NTAyLCJodHRwOi8vZGV2cmV2LmFpL2F1dGgwX3VpZCI6ImRvbjppZGVudGl0eTpkdnJ2LXVzLTE6ZGV2by9zdXBlcjphdXRoMF91c2VyL29pZGN8cGFzc3dvcmRsZXNzfGVtYWlsfDY4YzEwYjJkN2YwNmYzM2U2NDk0MjEyZiIsImh0dHA6Ly9kZXZyZXYuYWkvYXV0aDBfdXNlcl9pZCI6Im9pZGN8cGFzc3dvcmRsZXNzfGVtYWlsfDY4YzEwYjJkN2YwNmYzM2U2NDk0MjEyZiIsImh0dHA6Ly9kZXZyZXYuYWkvZGV2b19kb24iOiJkb246aWRlbnRpdHk6ZHZydi1pbi0xOmRldm8vMkcyVlpxY3JpaSIsImh0dHA6Ly9kZXZyZXYuYWkvZGV2b2lkIjoiREVWLTJHMlZacWNyaWkiLCJodHRwOi8vZGV2cmV2LmFpL2RldnVpZCI6IkRFVlUtMTE3MiIsImh0dHA6Ly9kZXZyZXYuYWkvZGlzcGxheW5hbWUiOiJSYXRhbiBLdW1hciBKaGEiLCJodHRwOi8vZGV2cmV2LmFpL2VtYWlsIjoicmF0YW4uamhhQHBheXRtLmNvbSIsImh0dHA6Ly9kZXZyZXYuYWkvZnVsbG5hbWUiOiJSYXRhbiBLdW1hciBKaGEiLCJodHRwOi8vZGV2cmV2LmFpL2lzX3ZlcmlmaWVkIjp0cnVlLCJodHRwOi8vZGV2cmV2LmFpL3Rva2VudHlwZSI6InVybjpkZXZyZXY6cGFyYW1zOm9hdXRoOnRva2VuLXR5cGU6cGF0IiwiaWF0IjoxNzc1MTQ2NTAyLCJpc3MiOiJodHRwczovL2F1dGgtdG9rZW4uZGV2cmV2LmFpLyIsImp0aSI6ImRvbjppZGVudGl0eTpkdnJ2LWluLTE6ZGV2by8yRzJWWnFjcmlpOnRva2VuLzFIYXhrY05laCIsIm9yZ19pZCI6Im9yZ19EcktKVVB1NzYwanVTQVR2Iiwic3ViIjoiZG9uOmlkZW50aXR5OmR2cnYtaW4tMTpkZXZvLzJHMlZacWNyaWk6ZGV2dS8xMTcyIn0.v6r-_D33Om8CF1IyuSelYSLMKOKXTPiOva-8WoyfoKOFnofKGL7CvZZiFy_1HZkh05Sf40J3b8t7wdNpKj0cMLlnUCfyw9hFjBmRYF6Cr_4P-B4tBsZt-pg4LpWBbFn5eilVqlZbEMtctsSAv3jzgS0DL8RjyTFzmkHndHRTDSjZeX2e2qS5anvmWbUtgpFcQYXKjRwpJ5PWtaYCmXpVJDz6JqZAjuMdYTy6qOCaOOOZxAByncZBHSgJtOq8T88RNJEvjyrbSZ98drFyZXTfbmoHHgi_1wvLPCVzAvIBBI4L5Msz2_HtlguW7YA6316oYmmRja9s5h3YC_W8pFyB5Q" 
+# Page configuration
+st.set_page_config(page_title="DevRev UPHD Automator", layout="wide")
 
-st.title("🚀 DevRev Automated Pendency Report")
+st.title("📊 DevRev Reporting Automation")
 
-if st.button("Fetch & Sync Live Data"):
-    with st.spinner("Connecting to DevRev API..."):
-        
-        # API Configuration
-        url = "https://api.devrev.ai/works.list" # Example endpoint for tickets
+# --- TOKEN YAHAN SE FETCH HOGA (NO HARDCODED TOKEN) ---
+try:
+    # Ye line Streamlit Secrets se token uthayegi
+    DEVREV_TOKEN = st.secrets["DEVREV_TOKEN"]
+except Exception as e:
+    st.error("Error: Secrets mein 'DEVREV_TOKEN' nahi mila. Dashboard ki settings check karein.")
+    st.stop()
+
+if st.button("Sync Live Data from DevRev"):
+    with st.spinner("Fetching data from CRM..."):
+        # DevRev API URL
+        url = "https://api.devrev.ai/works.list"
         headers = {
-            "Authorization": f"Bearer {eyJhbGciOiJSUzI1NiIsImlzcyI6Imh0dHBzOi8vYXV0aC10b2tlbi5kZXZyZXYuYWkvIiwia2lkIjoic3RzX2tpZF9yc2EiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOlsiamFudXMiXSwiYXpwIjoiZG9uOmlkZW50aXR5OmR2cnYtaW4tMTpkZXZvLzJHMlZacWNyaWk6ZGV2dS8xMTcyIiwiZXhwIjoxNzc3NzM4NTAyLCJodHRwOi8vZGV2cmV2LmFpL2F1dGgwX3VpZCI6ImRvbjppZGVudGl0eTpkdnJ2LXVzLTE6ZGV2by9zdXBlcjphdXRoMF91c2VyL29pZGN8cGFzc3dvcmRsZXNzfGVtYWlsfDY4YzEwYjJkN2YwNmYzM2U2NDk0MjEyZiIsImh0dHA6Ly9kZXZyZXYuYWkvYXV0aDBfdXNlcl9pZCI6Im9pZGN8cGFzc3dvcmRsZXNzfGVtYWlsfDY4YzEwYjJkN2YwNmYzM2U2NDk0MjEyZiIsImh0dHA6Ly9kZXZyZXYuYWkvZGV2b19kb24iOiJkb246aWRlbnRpdHk6ZHZydi1pbi0xOmRldm8vMkcyVlpxY3JpaSIsImh0dHA6Ly9kZXZyZXYuYWkvZGV2b2lkIjoiREVWLTJHMlZacWNyaWkiLCJodHRwOi8vZGV2cmV2LmFpL2RldnVpZCI6IkRFVlUtMTE3MiIsImh0dHA6Ly9kZXZyZXYuYWkvZGlzcGxheW5hbWUiOiJSYXRhbiBLdW1hciBKaGEiLCJodHRwOi8vZGV2cmV2LmFpL2VtYWlsIjoicmF0YW4uamhhQHBheXRtLmNvbSIsImh0dHA6Ly9kZXZyZXYuYWkvZnVsbG5hbWUiOiJSYXRhbiBLdW1hciBKaGEiLCJodHRwOi8vZGV2cmV2LmFpL2lzX3ZlcmlmaWVkIjp0cnVlLCJodHRwOi8vZGV2cmV2LmFpL3Rva2VudHlwZSI6InVybjpkZXZyZXY6cGFyYW1zOm9hdXRoOnRva2VuLXR5cGU6cGF0IiwiaWF0IjoxNzc1MTQ2NTAyLCJpc3MiOiJodHRwczovL2F1dGgtdG9rZW4uZGV2cmV2LmFpLyIsImp0aSI6ImRvbjppZGVudGl0eTpkdnJ2LWluLTE6ZGV2by8yRzJWWnFjcmlpOnRva2VuLzFIYXhrY05laCIsIm9yZ19pZCI6Im9yZ19EcktKVVB1NzYwanVTQVR2Iiwic3ViIjoiZG9uOmlkZW50aXR5OmR2cnYtaW4tMTpkZXZvLzJHMlZacWNyaWk6ZGV2dS8xMTcyIn0.v6r-_D33Om8CF1IyuSelYSLMKOKXTPiOva-8WoyfoKOFnofKGL7CvZZiFy_1HZkh05Sf40J3b8t7wdNpKj0cMLlnUCfyw9hFjBmRYF6Cr_4P-B4tBsZt-pg4LpWBbFn5eilVqlZbEMtctsSAv3jzgS0DL8RjyTFzmkHndHRTDSjZeX2e2qS5anvmWbUtgpFcQYXKjRwpJ5PWtaYCmXpVJDz6JqZAjuMdYTy6qOCaOOOZxAByncZBHSgJtOq8T88RNJEvjyrbSZ98drFyZXTfbmoHHgi_1wvLPCVzAvIBBI4L5Msz2_HtlguW7YA6316oYmmRja9s5h3YC_W8pFyB5Q}",
+            "Authorization": f"Bearer {DEVREV_TOKEN}",
             "Content-Type": "application/json"
         }
-        
-        # Calling the API
-        response = requests.get(url, headers=headers)
-        
-        if response.status_code == 200:
-            data = response.json()
+
+        try:
+            response = requests.get(url, headers=headers)
             
-            # Convert JSON to Pandas DataFrame
-            # Note: 'works' is a common key in DevRev, adjust based on actual JSON structure
-            df = pd.json_normalize(data['works']) 
-            
-            # --- PENDENCY CALCULATION ---
-            # Replace 'created_date' with the exact column name from DevRev
-            df['created_date'] = pd.to_datetime(df['created_date'])
-            today = datetime.now()
-            df['Pendency (Days)'] = (today - df['created_date']).dt.days
-            
-            # --- PIVOT TABLE ---
-            pivot_table = df.pivot_table(
-                index='status', 
-                values='display_id', 
-                aggfunc='count', 
-                fill_value=0
-            )
-            
-            st.success("Data Synced Successfully!")
-            st.write("### Live Pendency Pivot", pivot_table)
-            
-            # Download Option
-            st.download_button("Export to Excel", data=df.to_csv(), file_name="devrev_sync.csv")
-            
-        else:
-            st.error(f"Failed to connect. Error Code: {response.status_code}")
-            st.write(response.text)
+            if response.status_code == 200:
+                data = response.json()
+                # Converting JSON to Table
+                df = pd.json_normalize(data.get('works', []))
+
+                if not df.empty:
+                    # Pendency Calculation
+                    # Note: Agar 'created_at' column name alag ho toh change kar sakte hain
+                    if 'created_at' in df.columns:
+                        df['created_at'] = pd.to_datetime(df['created_at'])
+                        df['Aging (Days)'] = (datetime.now() - df['created_at']).dt.days
+                    
+                    st.subheader("📈 Pendency Pivot Table")
+                    # Pivot Table: Status wise count
+                    pivot = df.pivot_table(index='status', values='display_id', aggfunc='count', fill_value=0)
+                    st.dataframe(pivot, use_container_width=True)
+
+                    st.subheader("📝 Raw Data Preview")
+                    st.write(df)
+                else:
+                    st.warning("No active tickets found in the response.")
+            else:
+                st.error(f"API Error: {response.status_code}")
+                st.info("Check if your Token is valid or expired.")
+
+        except Exception as err:
+            st.error(f"Something went wrong: {err}")
+
+# Footer
+st.sidebar.markdown("---")
+st.sidebar.write("Paytm UPHD Internal Tool")
